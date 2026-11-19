@@ -1,7 +1,7 @@
 import { ProductsService } from './products.service.js';
 import { ProductsRepository } from './repositories/products.repository.js';
 import { Test, TestingModule } from '@nestjs/testing';
-import { Mocked, vi } from 'vitest';
+import { vi } from 'vitest';
 import { PaginatedResponseDto } from './dto/paginated-response.dto.js';
 import { ProductDto } from './dto/product.dto.js';
 import { Product } from './models/product.model.js';
@@ -16,8 +16,13 @@ import { UpdateStockDto } from './dto/update-stock.dto.js';
 
 describe('ProductsService', () => {
   let service: ProductsService;
-  let repository: Mocked<ProductsRepository>;
   const transaction = {} as Transaction;
+
+  const createProduct = vi.fn<ProductsRepository['createProduct']>();
+  const findAllPaginated = vi.fn<ProductsRepository['findAllPaginated']>();
+  const findById = vi.fn<ProductsRepository['findById']>();
+  const updateStockById = vi.fn<ProductsRepository['updateStockById']>();
+  const deleteById = vi.fn<ProductsRepository['deleteById']>();
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
@@ -26,11 +31,11 @@ describe('ProductsService', () => {
         {
           provide: ProductsRepository,
           useValue: {
-            createProduct: vi.fn(),
-            findAllPaginated: vi.fn(),
-            findById: vi.fn(),
-            updateStockById: vi.fn(),
-            deleteById: vi.fn(),
+            createProduct,
+            findAllPaginated,
+            findById,
+            updateStockById,
+            deleteById,
           },
         },
         {
@@ -46,7 +51,6 @@ describe('ProductsService', () => {
     }).compile();
 
     service = module.get<ProductsService>(ProductsService);
-    repository = module.get(ProductsRepository);
   });
 
   afterEach(() => {
@@ -65,12 +69,12 @@ describe('ProductsService', () => {
         stock: 2,
       };
 
-      repository.createProduct.mockResolvedValue(model);
+      createProduct.mockResolvedValue(model);
 
       const result = await service.createProduct(createProductDto);
       const expectedProduct: ProductDto = mockedProductDto(productId);
 
-      expect(repository.createProduct).toHaveBeenCalledTimes(1);
+      expect(createProduct).toHaveBeenCalledTimes(1);
       expect(result).toEqual(expectedProduct);
     });
 
@@ -82,12 +86,12 @@ describe('ProductsService', () => {
         stock: 2,
       };
 
-      repository.createProduct.mockRejectedValue(new UniqueConstraintError({}));
+      createProduct.mockRejectedValue(new UniqueConstraintError({}));
 
       await expect(service.createProduct(createProductDto)).rejects.toThrow(
         UniqueConstraintError,
       );
-      expect(repository.createProduct).toHaveBeenCalledTimes(1);
+      expect(createProduct).toHaveBeenCalledTimes(1);
     });
   });
 
@@ -101,7 +105,7 @@ describe('ProductsService', () => {
         count: 1,
       };
 
-      repository.findAllPaginated.mockResolvedValue(model);
+      findAllPaginated.mockResolvedValue(model);
 
       const result = await service.findAllPaginated(page, size);
       const expectedResult: PaginatedResponseDto<ProductDto> = {
@@ -116,11 +120,8 @@ describe('ProductsService', () => {
         },
       };
 
-      expect(repository.findAllPaginated).toHaveBeenCalledTimes(1);
-      expect(repository.findAllPaginated).toHaveBeenCalledWith(
-        (page - 1) * size,
-        size,
-      );
+      expect(findAllPaginated).toHaveBeenCalledTimes(1);
+      expect(findAllPaginated).toHaveBeenCalledWith((page - 1) * size, size);
       expect(result).toEqual(expectedResult);
     });
 
@@ -129,14 +130,14 @@ describe('ProductsService', () => {
       const size: number = 10;
       const productId: number = 21;
 
-      repository.findAllPaginated.mockResolvedValue({
+      findAllPaginated.mockResolvedValue({
         rows: [mockedProduct(productId)],
         count: 21,
       });
 
       const result = await service.findAllPaginated(page, size);
 
-      expect(repository.findAllPaginated).toHaveBeenCalledWith(20, size);
+      expect(findAllPaginated).toHaveBeenCalledWith(20, size);
       expect(result.meta).toEqual({
         page,
         size,
@@ -153,20 +154,20 @@ describe('ProductsService', () => {
       const productId: number = 1;
       const model: Product = mockedProduct(productId);
 
-      repository.findById.mockResolvedValue(model);
+      findById.mockResolvedValue(model);
 
       const result = await service.findProductById(productId);
       const dto: ProductDto = mockedProductDto(productId);
 
-      expect(repository.findById).toHaveBeenCalledTimes(1);
-      expect(repository.findById).toHaveBeenCalledWith(productId);
+      expect(findById).toHaveBeenCalledTimes(1);
+      expect(findById).toHaveBeenCalledWith(productId);
       expect(result).toEqual(dto);
     });
 
     it('should throw NotFoundException if repository does not return the product', async () => {
       const productId: number = 99;
 
-      repository.findById.mockResolvedValue(null);
+      findById.mockResolvedValue(null);
 
       await expect(service.findProductById(productId)).rejects.toThrow(
         new NotFoundException(`Product with id: ${productId} not found`),
@@ -182,15 +183,15 @@ describe('ProductsService', () => {
       };
       const model: Product = mockedProduct(productId);
 
-      repository.updateStockById.mockResolvedValue(1);
-      repository.findById.mockResolvedValue(model);
+      updateStockById.mockResolvedValue(1);
+      findById.mockResolvedValue(model);
 
       const result = await service.updateStock(productId, dto);
       const expectedResult: ProductDto = mockedProductDto(productId);
 
-      expect(repository.findById).toHaveBeenCalledWith(productId, transaction);
-      expect(repository.findById).toHaveBeenCalledTimes(1);
-      expect(repository.updateStockById).toHaveBeenCalledWith(
+      expect(findById).toHaveBeenCalledWith(productId, transaction);
+      expect(findById).toHaveBeenCalledTimes(1);
+      expect(updateStockById).toHaveBeenCalledWith(
         productId,
         dto.amount,
         transaction,
@@ -204,15 +205,15 @@ describe('ProductsService', () => {
         amount: 2,
       };
 
-      repository.updateStockById.mockResolvedValue(0);
-      repository.findById.mockResolvedValue(null);
+      updateStockById.mockResolvedValue(0);
+      findById.mockResolvedValue(null);
 
       await expect(service.updateStock(productId, dto)).rejects.toThrow(
         new NotFoundException(`Product with id: ${productId} not found`),
       );
-      expect(repository.findById).toHaveBeenCalledWith(productId, transaction);
-      expect(repository.findById).toHaveBeenCalledTimes(1);
-      expect(repository.updateStockById).toHaveBeenCalledWith(
+      expect(findById).toHaveBeenCalledWith(productId, transaction);
+      expect(findById).toHaveBeenCalledTimes(1);
+      expect(updateStockById).toHaveBeenCalledWith(
         productId,
         dto.amount,
         transaction,
@@ -226,17 +227,17 @@ describe('ProductsService', () => {
       };
       const model: Product = mockedProduct(productId);
 
-      repository.updateStockById.mockResolvedValue(0);
-      repository.findById.mockResolvedValue(model);
+      updateStockById.mockResolvedValue(0);
+      findById.mockResolvedValue(model);
 
       await expect(service.updateStock(productId, dto)).rejects.toThrow(
         new UnprocessableEntityException(
           `Insufficient stock available for product with token: ${model.productToken}`,
         ),
       );
-      expect(repository.findById).toHaveBeenCalledWith(productId, transaction);
-      expect(repository.findById).toHaveBeenCalledTimes(1);
-      expect(repository.updateStockById).toHaveBeenCalledWith(
+      expect(findById).toHaveBeenCalledWith(productId, transaction);
+      expect(findById).toHaveBeenCalledTimes(1);
+      expect(updateStockById).toHaveBeenCalledWith(
         productId,
         dto.amount,
         transaction,
@@ -250,8 +251,8 @@ describe('ProductsService', () => {
       };
       const model: Product = mockedProduct(productId);
 
-      repository.updateStockById.mockResolvedValue(0);
-      repository.findById.mockResolvedValue(model);
+      updateStockById.mockResolvedValue(0);
+      findById.mockResolvedValue(model);
 
       await expect(service.updateStock(productId, dto)).rejects.toThrow(
         new UnprocessableEntityException(
@@ -265,19 +266,19 @@ describe('ProductsService', () => {
     it('should delete the specified product', async () => {
       const productId: number = 1;
 
-      repository.deleteById.mockResolvedValue(1);
+      deleteById.mockResolvedValue(1);
 
       await expect(
         service.deleteProductById(productId),
       ).resolves.toBeUndefined();
-      expect(repository.deleteById).toHaveBeenCalledTimes(1);
-      expect(repository.deleteById).toHaveBeenCalledWith(productId);
+      expect(deleteById).toHaveBeenCalledTimes(1);
+      expect(deleteById).toHaveBeenCalledWith(productId);
     });
 
     it('should throw NotFoundException if repository does not return the product', async () => {
       const productId: number = 99;
 
-      repository.deleteById.mockResolvedValue(0);
+      deleteById.mockResolvedValue(0);
 
       await expect(service.deleteProductById(productId)).rejects.toThrow(
         new NotFoundException(`Product with id: ${productId} not found`),
