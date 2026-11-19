@@ -22,9 +22,12 @@ export class GlobalExceptionFilter implements ExceptionFilter {
     const { status, messages } = this.resolveException(exception);
 
     if (status >= 500) {
+      const reason =
+        exception instanceof Error ? exception.message : String(exception);
+
       this.logger.error(
-        `${request.method} ${request.url} -> ${status}`,
-        exception instanceof Error ? exception.stack : String(exception),
+        `${request.method} ${request.url} -> ${status}: ${reason}`,
+        exception instanceof Error ? exception.stack : undefined,
       );
     } else {
       this.logger.warn(

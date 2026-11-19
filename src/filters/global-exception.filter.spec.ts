@@ -1,5 +1,10 @@
 import { GlobalExceptionFilter } from './global-exception.filter.js';
-import { ArgumentsHost, HttpException, HttpStatus } from '@nestjs/common';
+import {
+  ArgumentsHost,
+  HttpException,
+  HttpStatus,
+  Logger,
+} from '@nestjs/common';
 import {
   UniqueConstraintError,
   ValidationError,
@@ -26,6 +31,29 @@ describe('GlobalExceptionFilter', () => {
 
   afterEach(async () => {
     vi.clearAllMocks();
+  });
+
+  it('should log the error message for 500 errors without sending it to the client', () => {
+    const errorSpy = vi
+      .spyOn(Logger.prototype, 'error')
+      .mockImplementation(() => undefined);
+    const exception = new Error(
+      "Field 'created_at' doesn't have a default value",
+    );
+
+    filter.catch(exception, mockArgumentsHost);
+
+    expect(errorSpy).toHaveBeenCalledWith(
+      "POST /products -> 500: Field 'created_at' doesn't have a default value",
+      exception.stack,
+    );
+    expect(mockJson).toHaveBeenCalledWith(
+      expect.objectContaining({
+        statusCode: 500,
+        messages: ['Internal Server Error'],
+      }),
+    );
+    errorSpy.mockRestore();
   });
 
   it('should map Sequelize UniqueConstraintError to ConflictException', async () => {
